@@ -1,0 +1,17 @@
+FROM python:3.10-alpine
+
+WORKDIR /app
+
+COPY . /app/
+
+ENV PYTHONPATH /app:$PYTHONPATH
+
+RUN apk update && \
+    apk add --no-cache make
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Run the application
+CMD ["python", "sample_2/main.py"]
+# CMD ["make", "run"]

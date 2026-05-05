@@ -1,0 +1,11 @@
+setuptools
+wheel
+pytest
+boto3
+pandas
+requests
+moto[s3]
+ruff
+black
+isort
+pre-commit

@@ -1,0 +1,53 @@
+{
+  "name": "sample_code_2",
+
+  // ── Docker Compose setup ──────────────────────────────────────────────────
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  // ── Ports forwarded to host ───────────────────────────────────────────────
+  // 4566 → LocalStack S3 (reachable at http://localhost:4566 on host)
+  "forwardPorts": [4566],
+  "portsAttributes": {
+    "4566": {
+      "label": "LocalStack S3",
+      "onAutoForward": "silent"
+    }
+  },
+
+  // ── Post-create bootstrap ─────────────────────────────────────────────────
+  "postCreateCommand": "bash /workspace/.devcontainer/scripts/post-create.sh",
+
+  // ── VS Code / Cursor extensions ───────────────────────────────────────────
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Python
+        "ms-python.python",
+        "ms-python.pylance",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        // Docker
+        "ms-azuretools.vscode-docker",
+        // Git
+        "eamodio.gitlens",
+        // AWS
+        "amazonwebservices.aws-toolkit-vscode",
+        // Misc
+        "EditorConfig.EditorConfig",
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+
+[tool.poetry]
+name = "sample_2"
+version = "0.1.0"
+description = "BEA API data pipeline with AWS S3 storage"
+authors = ["KJ Lang <k.j.lang.tech@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.25.1"
+setuptools = "*"
+wheel = "*"
+pytest = "*"
+boto3 = "*"
+pandas = "*"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.2"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long — black handles this
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sample_2"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["sample_2"]
+

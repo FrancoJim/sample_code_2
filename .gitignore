@@ -1,0 +1,29 @@
+# System files
+.DS_Store
+
+# IDE/Editor files
+.vscode/
+.idea/
+
+# Python dependency folder
+venv/
+
+# Python byte code
+__pycache__/
+
+# Build/Output directories
+dist/
+build/
+
+# Environment files
+.env
+
+# Configuration files
+.config/
+
+# Data Directory
+data/
+
+# Claude Code local files
+.claude/
+

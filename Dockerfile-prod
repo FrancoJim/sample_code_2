@@ -1,0 +1,17 @@
+FROM python:3.10-alpine
+
+WORKDIR /app
+
+COPY . /app/
+
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+RUN adduser -D app
+
+USER app
+
+CMD ["python", "sample_2/main.py"]
+

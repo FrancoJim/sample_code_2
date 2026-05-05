@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  app-dev:
+    container_name: sample_2_dev
+    image: sample_2_dev
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    environment:
+      - ENV=development
+    profiles:
+      - dev
+
+  app-prod:
+    container_name: sample_2_prod
+    image: sample_2_prod
+    env_file:
+      - .env
+    build:
+      context: .
+      dockerfile: Dockerfile-prod
+    environment:
+      - ENV=production
+    profiles:
+      - prod
+
+  app-test:
+    container_name: sample_2_test
+    image: sample_2_test
+    env_file:
+      - .env
+    build:
+      context: .
+      dockerfile: Dockerfile-test
+    environment:
+      - ENV=testing
+    profiles:
+      - test
