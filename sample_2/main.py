@@ -1,17 +1,16 @@
 import argparse
 import logging
 import os
+import sys
+from datetime import UTC
 from datetime import datetime as dt
 
-from botocore.exceptions import NoCredentialsError
+import requests
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
 from sample_2.libs.storages import AwsS3
-from sample_2.libs.utils import BEA_Wrapper
+from sample_2.libs.utils import BEA_Wrapper, BEAError
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -21,39 +20,47 @@ def run(
     dataset: str,
     year: str,
     delete_bucket: bool,
-) -> None:
-    if delete_bucket:
-        AwsS3.delete_bucket_and_contents(bucket=s3_bucket)
-        logger.info(f"Deleted bucket {s3_bucket}")
-        return
-
-    bea = BEA_Wrapper(api_key=os.environ["BEA_API_KEY"])
-
-    if dataset == "datasets":
-        df = bea.list_datasets()
-        file_name = "bea_datasets"
-    else:
-        df = bea.fetch_gdp_by_industry(year=year)
-        file_name = f"gdp_by_industry_{year}"
-
-    os.makedirs(dest_path, exist_ok=True)
-    timestamp = dt.now().strftime("%Y%m%d%H%M%S")
-    base = f"{dest_path}/{timestamp}.{file_name}"
-    df.to_pickle(f"{base}.pkl")
-    df.to_csv(f"{base}.csv", index=False)
-    logger.info(f"Saved {len(df)} rows to {base}.{{pkl,csv}}")
-
+) -> int:
+    """Run the pipeline and return a process exit code (0 = success)."""
     try:
+        if delete_bucket:
+            AwsS3.delete_bucket_and_contents(bucket=s3_bucket)
+            return 0
+
+        api_key = os.environ.get("BEA_API_KEY")
+        if not api_key:
+            logger.error("BEA_API_KEY is not set (copy example.env to .env and add your key)")
+            return 2
+
+        bea = BEA_Wrapper(api_key=api_key)
+        if dataset == "datasets":
+            df = bea.list_datasets()
+            file_name = "bea_datasets"
+        else:
+            df = bea.fetch_gdp_by_industry(year=year)
+            file_name = f"gdp_by_industry_{year}"
+
+        os.makedirs(dest_path, exist_ok=True)
+        timestamp = dt.now(UTC).strftime("%Y%m%d%H%M%S")
+        base = f"{dest_path}/{timestamp}.{file_name}"
+        df.to_pickle(f"{base}.pkl")
+        df.to_csv(f"{base}.csv", index=False)
+        logger.info(f"Saved {len(df)} rows to {base}.{{pkl,csv}}")
+
         AwsS3.create_bucket(bucket=s3_bucket)
-        logger.info(f"Buckets: {AwsS3.list_buckets()}")
         AwsS3.copy_to_bucket(bucket=s3_bucket, prefix="data/", local_dir=dest_path)
-        logger.info(
-            f"Upload complete. Objects in {s3_bucket}: {AwsS3.list_bucket_files(bucket=s3_bucket, prefix='data/')}"
-        )
+        objects = AwsS3.list_bucket_files(bucket=s3_bucket, prefix="data/")
+        logger.info(f"Upload complete. {len(objects)} objects in s3://{s3_bucket}/data/")
+        return 0
+    except BEAError as e:
+        logger.error(str(e))
+    except requests.RequestException as e:
+        logger.error(f"BEA API request failed: {e}")
     except NoCredentialsError:
-        logger.error("AWS credentials not found — skipping S3 upload")
-    except Exception as e:
+        logger.error("AWS credentials not found")
+    except (BotoCoreError, ClientError) as e:
         logger.error(f"S3 error: {e}")
+    return 1
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -75,12 +82,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-if __name__ == "__main__":
-    args = parse_args()
-    run(
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+    )
+    args = parse_args(argv)
+    return run(
         s3_bucket=args.bucket,
         dest_path=args.dest,
         dataset=args.dataset,
         year=args.year,
         delete_bucket=args.delete_bucket,
     )
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

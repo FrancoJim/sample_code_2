@@ -27,8 +27,7 @@
         // Python
         "ms-python.python",
         "ms-python.pylance",
-        "ms-python.black-formatter",
-        "ms-python.isort",
+        "charliermarsh.ruff",
         // Docker
         "ms-azuretools.vscode-docker",
         // Git
@@ -40,11 +39,10 @@
         "streetsidesoftware.code-spell-checker"
       ],
       "settings": {
-        "python.defaultInterpreterPath": "/usr/bin/python3",
-        "python.formatting.provider": "black",
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
         "editor.formatOnSave": true,
         "[python]": {
-          "editor.defaultFormatter": "ms-python.black-formatter"
+          "editor.defaultFormatter": "charliermarsh.ruff"
         },
         "terminal.integrated.defaultProfile.linux": "bash"
       }

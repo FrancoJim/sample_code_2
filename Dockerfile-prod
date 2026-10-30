@@ -1,17 +1,37 @@
-FROM python:3.10-alpine
+# --- build stage ---
+FROM python:3.14-slim AS builder
+WORKDIR /build
+
+COPY pyproject.toml README.md ./
+COPY sample_2/ sample_2/
+
+RUN pip install --no-cache-dir build && python -m build --wheel
+
+# --- runtime stage ---
+FROM python:3.14-slim
+LABEL maintainer="KJ Lang <k.j.lang.tech@gmail.com>"
+LABEL org.opencontainers.image.source="https://github.com/FrancoJim/sample_code_2"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY . /app/
+# Pinned runtime deps first (better layer caching), then the app wheel without re-resolving deps.
+# No test or lint tooling in this image.
+COPY requirements.txt .
+COPY --from=builder /build/dist/*.whl /tmp/
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --no-deps /tmp/*.whl && \
+    rm -rf /tmp/*.whl && \
+    useradd --system --no-create-home --shell /usr/sbin/nologin appuser && \
+    mkdir -p /app/data && chown appuser /app/data
 
-ENV PYTHONPATH=/app:$PYTHONPATH
+USER appuser
 
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Snapshots are written to /app/data; mount a volume there to keep them.
+VOLUME ["/app/data"]
 
-RUN adduser -D app
-
-USER app
-
-CMD ["python", "sample_2/main.py"]
-
+ENTRYPOINT ["bea-pipeline"]
+CMD ["--help"]

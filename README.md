@@ -1,7 +1,7 @@
 # BEA Economic Data Pipeline
 
-![CI](https://github.com/kjlang/sample_code_2/actions/workflows/ci.yml/badge.svg)
-![Python](https://img.shields.io/badge/python-3.10-blue)
+[![CI](https://github.com/FrancoJim/sample_code_2/actions/workflows/ci.yml/badge.svg)](https://github.com/FrancoJim/sample_code_2/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 A Python automation pipeline that pulls economic datasets from the [Bureau of Economic Analysis (BEA) REST API](https://apps.bea.gov/api/_pdf/bea_web_service_api_user_guide.pdf), writes timestamped snapshots to disk as CSV and Pickle, and uploads them to AWS S3.
@@ -14,9 +14,24 @@ Demonstrates practical patterns for:
 - Containerized dev environment with LocalStack for local S3 (no AWS account needed to develop)
 - GitHub Actions CI pipeline: lint → test → docker build, gated in sequence
 
+## Highlights
+
+- **Fails loudly, never silently**: bad API key, BEA errors, network or S3 failures exit non-zero with a clear message (no tracebacks, no false success)
+- **Safe requests**: query parameters are URL-encoded, so user input can't inject extra parameters
+- **Region-aware S3**: works outside `us-east-1`; existence checks use `HeadBucket` (no account-wide `ListBuckets` permission needed)
+- **100% test coverage** with mocked AWS (`moto`) and BEA API; tests stay hermetic even inside the LocalStack devcontainer
+- **Production container**: multi-stage build, pinned runtime deps only, non-root user, read-only filesystem
+- **CI** on Python 3.11–3.14 plus a Docker build and smoke test; Dependabot keeps deps current
+
 ---
 
 ## Quick Start
+
+```bash
+make            # list every task
+make check      # create .venv, then lint + typecheck + tests
+make docker-run BUCKET=my-bucket   # build and run the production image (uses .env)
+```
 
 **Fastest path — devcontainer (recommended):**
 
@@ -35,9 +50,8 @@ cp example.env .env
 
 ```bash
 cp example.env .env          # fill in BEA_API_KEY and AWS credentials
-make install
-make test
-python -m sample_2.main --bucket my-bucket --dataset gdp --year 2023
+make check
+make run BUCKET=my-bucket DATASET=gdp YEAR=2023
 ```
 
 ---
@@ -52,18 +66,19 @@ sample_code_2/
 │       ├── utils.py          # BEA_Wrapper — REST API client + DataFrame output
 │       └── storages.py       # AwsS3 — create / upload / list / delete
 ├── tests/
-│   └── test_sample.py        # 14 tests: BEA API (mocked HTTP) + S3 (moto)
+│   ├── conftest.py           # keeps AWS env hermetic for every test
+│   └── test_sample.py        # 30 tests: BEA API, S3 (moto), CLI exit codes
 ├── .devcontainer/
-│   ├── Dockerfile            # Ubuntu 22.04 + Python + Docker CLI + AWS CLI
+│   ├── Dockerfile            # Python 3.14 + Docker CLI + AWS CLI
 │   ├── docker-compose.yml    # devcontainer service + LocalStack S3
 │   └── scripts/
 │       ├── post-create.sh    # installs deps, configures AWS CLI, seeds S3 bucket
 │       └── devcontainer-ps1.sh  # custom PS1: repo | branch | path
 ├── .github/workflows/ci.yml  # lint → test → docker build
-├── Dockerfile-{dev,prod,test}
-├── docker-compose.yml        # app profiles: dev / prod / test
+├── Dockerfile-{dev,prod}
+├── docker-compose.yml        # app profiles: dev / prod
 ├── Makefile
-├── pyproject.toml            # ruff + black + isort config
+├── pyproject.toml            # packaging, ruff, mypy, pytest config
 └── .pre-commit-config.yaml
 ```
 
@@ -99,16 +114,16 @@ AWS S3  (or LocalStack in dev)
 
 | Layer | Tech |
 |---|---|
-| Language | Python 3.10 |
+| Language | Python 3.11+ |
 | HTTP client | `requests` |
 | Data | `pandas` |
 | Cloud storage | `boto3` / AWS S3 |
 | Local AWS | LocalStack 3 (S3) |
-| Packaging | Docker (Alpine), docker compose |
+| Packaging | Docker (python:3.14-slim, multi-stage), docker compose |
 | Testing | `pytest`, `moto` (S3), `unittest.mock` (BEA API) |
-| Linting | `ruff`, `black`, `isort`, `pre-commit` |
+| Linting | `ruff` (lint + format), `mypy`, `pre-commit` |
 | CI/CD | GitHub Actions |
-| Dev environment | VS Code / Cursor devcontainer (Ubuntu 22.04) |
+| Dev environment | VS Code / Cursor devcontainer (Debian, Python 3.14) |
 
 ---
 
@@ -165,9 +180,9 @@ python -m sample_2.main --bucket my-bucket --delete-bucket
 ### Docker (app images)
 
 ```bash
-make run-dev      # development — source mounted for live edits
-make run-prod     # production build
-make docker-test  # run test suite in container
+make docker-build # build the production image
+make docker-run BUCKET=my-bucket  # run it with .env
+make docker-test  # lint + typecheck + tests in the dev image
 ```
 
 ---
@@ -189,17 +204,17 @@ No live AWS credentials or BEA API key needed. All external calls are mocked.
 
 ## Devcontainer
 
-A fully configured [devcontainer](https://containers.dev/) is included for VS Code and Cursor. Opens into a ready-to-use Ubuntu 22.04 environment — LocalStack S3 starts automatically, AWS CLI is pre-pointed at it, and a default bucket is created.
+A fully configured [devcontainer](https://containers.dev/) is included for VS Code and Cursor. Opens into a ready-to-use Python 3.14 (Debian) environment — LocalStack S3 starts automatically, AWS CLI is pre-pointed at it, and a default bucket is created.
 
 **What's inside the image:**
 
 | | |
 |---|---|
-| OS | Ubuntu 22.04 |
-| Python | 3.10, pip, poetry |
+| OS | Debian (python:3.14-slim) |
+| Python | 3.14, pip; package installed with `.[dev]` |
 | AWS | CLI v2 + boto3; LocalStack S3 at `http://localstack:4566` |
 | Docker | CLI + Compose plugin (mounts OrbStack / Docker socket) |
-| Linting | ruff, black, isort, pre-commit |
+| Linting | ruff, mypy, pre-commit |
 | Shell | `repo \| branch \| path $` prompt |
 
 **Open:**
@@ -241,14 +256,14 @@ To switch to real AWS, set `AWS_ENDPOINT_URL=` (empty string) in `.env`.
 ## Linting & pre-commit
 
 ```bash
-make lint            # ruff + black --check + isort --check
+make lint            # ruff check + ruff format --check
 make lint-fix        # auto-fix everything
 make pre-commit-install   # install git hooks
 ```
 
-Hooks run on every `git commit`: ruff (with autofix), black, isort.
+Hooks run on every `git commit`: ruff (with autofix), ruff format, whitespace and private-key checks.
 
-Config lives in [`pyproject.toml`](pyproject.toml) (`[tool.ruff]`, `[tool.black]`, `[tool.isort]`).
+Config lives in [`pyproject.toml`](pyproject.toml) (`[tool.ruff]`, `[tool.mypy]`, `[tool.pytest.ini_options]`).
 
 ---
 
@@ -257,11 +272,10 @@ Config lives in [`pyproject.toml`](pyproject.toml) (`[tool.ruff]`, `[tool.black]
 GitHub Actions runs on every push and pull request to `master`. Jobs are gated in sequence:
 
 ```
-lint  →  test  →  docker build
+test (Python 3.11–3.14)  →  docker build + smoke test
 ```
 
-1. **lint** — `ruff check`, `black --check`, `isort --check`
-2. **test** — `pytest` with mocked AWS and BEA API (no credentials needed)
-3. **docker-build** — builds `Dockerfile-prod` and `Dockerfile-test`
+1. **test** — `ruff`, `mypy`, `pytest` with mocked AWS and BEA API (no credentials needed)
+2. **docker** — builds `Dockerfile-prod` and checks `--help` and the clean missing-key exit
 
 See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).

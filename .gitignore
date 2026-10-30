@@ -27,3 +27,12 @@ data/
 # Claude Code local files
 .claude/
 
+# Virtualenvs, tool caches, coverage, build output
+.venv/
+.lockenv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/

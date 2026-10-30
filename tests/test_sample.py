@@ -3,10 +3,13 @@ from unittest.mock import MagicMock, patch
 import boto3
 import pandas as pd
 import pytest
+import requests
+from botocore.exceptions import ClientError, NoCredentialsError
 from moto import mock_aws
 
 from sample_2.libs.storages import AwsS3
-from sample_2.libs.utils import BEA_Wrapper, add
+from sample_2.libs.utils import BEA_Wrapper, BEAError, add
+from sample_2.main import main
 
 # ---------------------------------------------------------------------------
 # utils.py
@@ -55,7 +58,7 @@ class TestBEAWrapper:
         assert len(df) == 2
         assert "DatasetName" in df.columns
 
-    def test_list_datasets_request_url(self):
+    def test_list_datasets_request(self):
         payload = {"BEAAPI": {"Results": {"Dataset": []}}}
         with patch(
             "sample_2.libs.utils.requests.get", return_value=self._mock_response(payload)
@@ -63,9 +66,10 @@ class TestBEAWrapper:
             BEA_Wrapper(api_key=self.API_KEY).list_datasets()
 
         called_url = mock_get.call_args[0][0]
-        assert self.API_KEY in called_url
-        assert "GETDATASETLIST" in called_url
+        params = mock_get.call_args.kwargs["params"]
         assert called_url.startswith("https://")
+        assert params["UserID"] == self.API_KEY
+        assert params["method"] == "GETDATASETLIST"
 
     def test_fetch_gdp_by_industry_returns_dataframe(self):
         payload = {
@@ -96,6 +100,37 @@ class TestBEAWrapper:
 
         called_url = mock_get.call_args[0][0]
         assert "&amp;" not in called_url, "URL must not contain HTML-encoded ampersands"
+
+    def test_year_cannot_inject_query_params(self):
+        """Values are URL-encoded by requests, so '&' in --year stays inside the Year value."""
+        req = requests.Request(
+            "GET", BEA_Wrapper.api_base, params={"Year": "2023&UserID=attacker"}
+        ).prepare()
+        assert req.url is not None
+        assert "UserID=attacker" not in req.url
+        assert "Year=2023%26UserID%3Dattacker" in req.url
+
+    def test_fetch_gdp_accepts_dict_results(self):
+        payload = {"BEAAPI": {"Results": {"Data": [{"DataValue": "1"}]}}}
+        with patch("sample_2.libs.utils.requests.get", return_value=self._mock_response(payload)):
+            df = BEA_Wrapper(api_key=self.API_KEY).fetch_gdp_by_industry()
+        assert len(df) == 1
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            # Real shape returned for an invalid key (HTTP 200, error under Results)
+            {"BEAAPI": {"Results": {"Error": {"APIErrorDescription": "Invalid API UserId."}}}},
+            {"BEAAPI": {"Error": {"ErrorDetail": "Bad parameter"}}},
+        ],
+    )
+    def test_api_error_raises_bea_error(self, payload):
+        response = self._mock_response(payload)
+        with (
+            patch("sample_2.libs.utils.requests.get", return_value=response),
+            pytest.raises(BEAError, match="BEA API error"),
+        ):
+            BEA_Wrapper(api_key=self.API_KEY).fetch_gdp_by_industry()
 
 
 # ---------------------------------------------------------------------------
@@ -145,3 +180,91 @@ class TestAwsS3:
 
     def test_delete_nonexistent_bucket_is_safe(self):
         AwsS3.delete_bucket_and_contents("bucket-that-does-not-exist")  # should not raise
+
+    def test_copy_to_bucket_keeps_subdirectories(self, tmp_path):
+        self.s3.create_bucket(Bucket=self.BUCKET)
+        for sub in ("a", "b"):
+            (tmp_path / sub).mkdir()
+            (tmp_path / sub / "f.csv").write_text(sub)
+        AwsS3.copy_to_bucket(bucket=self.BUCKET, prefix="up/", local_dir=str(tmp_path))
+        keys = AwsS3.list_bucket_files(bucket=self.BUCKET, prefix="up/")
+        assert sorted(keys) == ["up/a/f.csv", "up/b/f.csv"]  # no silent overwrite
+
+    def test_copy_from_bucket(self, tmp_path):
+        self.s3.create_bucket(Bucket=self.BUCKET)
+        self.s3.put_object(Bucket=self.BUCKET, Key="data/x.csv", Body=b"1,2")
+        self.s3.put_object(Bucket=self.BUCKET, Key="data/sub/", Body=b"")
+        self.s3.put_object(Bucket=self.BUCKET, Key="data/../../escape.txt", Body=b"no")
+        AwsS3.copy_from_bucket(bucket=self.BUCKET, prefix="data/", local_dir=str(tmp_path / "out"))
+        assert (tmp_path / "out" / "data" / "x.csv").read_bytes() == b"1,2"
+        assert not (tmp_path / "escape.txt").exists()
+
+    def test_create_bucket_outside_us_east_1(self, monkeypatch):
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "us-west-2")
+        AwsS3.create_bucket(self.BUCKET)
+        location = self.s3.get_bucket_location(Bucket=self.BUCKET)["LocationConstraint"]
+        assert location == "us-west-2"
+
+    def test_bucket_exists_reraises_other_errors(self):
+        error = ClientError({"Error": {"Code": "403"}}, "HeadBucket")
+        with patch("sample_2.libs.storages.boto3.client") as client:
+            client.return_value.head_bucket.side_effect = error
+            with pytest.raises(ClientError):
+                AwsS3.bucket_exists(self.BUCKET)
+
+
+# ---------------------------------------------------------------------------
+# main.py (CLI)
+# ---------------------------------------------------------------------------
+
+
+class TestMain:
+    BUCKET = "test-bucket-cli"
+
+    @pytest.fixture(autouse=True)
+    def env(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("BEA_API_KEY", "test-key")
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+        self.dest = str(tmp_path / "data")
+        with mock_aws():
+            yield
+
+    def _df(self):
+        return pd.DataFrame([{"Industry": "11", "DataValue": "100.0"}])
+
+    def test_gdp_saves_and_uploads(self):
+        with patch.object(BEA_Wrapper, "fetch_gdp_by_industry", return_value=self._df()):
+            code = main(["--bucket", self.BUCKET, "--dest", self.dest, "--year", "2022"])
+        assert code == 0
+        keys = AwsS3.list_bucket_files(self.BUCKET, "data/")
+        assert len(keys) == 2
+        assert all("gdp_by_industry_2022" in k for k in keys)
+
+    def test_datasets_option(self):
+        with patch.object(BEA_Wrapper, "list_datasets", return_value=self._df()):
+            assert (
+                main(["--bucket", self.BUCKET, "--dest", self.dest, "--dataset", "datasets"]) == 0
+            )
+        assert any("bea_datasets" in k for k in AwsS3.list_bucket_files(self.BUCKET, "data/"))
+
+    def test_delete_bucket(self):
+        AwsS3.create_bucket(self.BUCKET)
+        assert main(["--bucket", self.BUCKET, "--delete-bucket"]) == 0
+        assert not AwsS3.bucket_exists(self.BUCKET)
+
+    def test_missing_api_key_exits_2(self, monkeypatch):
+        monkeypatch.delenv("BEA_API_KEY")
+        assert main(["--bucket", self.BUCKET, "--dest", self.dest]) == 2
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            BEAError("BEA API error: Invalid API UserId."),
+            requests.ConnectionError("down"),
+            NoCredentialsError(),
+            ClientError({"Error": {"Code": "AccessDenied"}}, "CreateBucket"),
+        ],
+    )
+    def test_failures_exit_nonzero(self, error):
+        with patch.object(BEA_Wrapper, "fetch_gdp_by_industry", side_effect=error):
+            assert main(["--bucket", self.BUCKET, "--dest", self.dest]) == 1

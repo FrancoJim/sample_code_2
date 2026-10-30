@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "==> Installing Python dependencies"
-pip install --quiet --no-cache-dir -r /workspace/requirements.txt
+pip install --quiet --no-cache-dir -e "/workspace[dev]"
 
 echo "==> Configuring AWS CLI for LocalStack"
 # Write a named profile so both 'aws' CLI and boto3 (via AWS_ENDPOINT_URL)

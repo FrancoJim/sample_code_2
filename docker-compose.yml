@@ -1,43 +1,30 @@
-version: "3.9"
-
 services:
   app-dev:
-    container_name: sample_2_dev
-    image: sample_2_dev
     build:
       context: .
       dockerfile: Dockerfile-dev
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
       - .:/app
-    environment:
-      - ENV=development
     profiles:
       - dev
 
   app-prod:
-    container_name: sample_2_prod
-    image: sample_2_prod
-    env_file:
-      - .env
+    image: bea-pipeline:latest
     build:
       context: .
       dockerfile: Dockerfile-prod
-    environment:
-      - ENV=production
+    env_file:
+      - path: .env
+        required: false
+    # Pass pipeline flags after the service name, e.g.:
+    #   docker compose --profile prod run --rm app-prod --bucket my-bucket --dataset gdp
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./data:/app/data
     profiles:
       - prod
-
-  app-test:
-    container_name: sample_2_test
-    image: sample_2_test
-    env_file:
-      - .env
-    build:
-      context: .
-      dockerfile: Dockerfile-test
-    environment:
-      - ENV=testing
-    profiles:
-      - test
