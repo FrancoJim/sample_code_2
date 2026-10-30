@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # botocore pins python-dateutil<3.0.0; a 3.x pin makes requirements.txt uninstallable
+      - dependency-name: python-dateutil
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
