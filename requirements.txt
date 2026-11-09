@@ -1,6 +1,6 @@
 # Pinned runtime dependencies for the Docker image (tested versions).
 # Regenerate with: make lock
-boto3==1.43.122
+boto3==1.43.125
 botocore==1.43.122
 certifi==2026.10.23
 charset-normalizer==3.5.2
