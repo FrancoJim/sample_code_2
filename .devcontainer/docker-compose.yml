@@ -1,0 +1,72 @@
+# ── Devcontainer environment for sample_code_2 ───────────────────────────────
+#
+# Services:
+#   devcontainer  — Ubuntu dev shell with Python, Docker CLI, AWS CLI
+#   localstack    — Local AWS S3 endpoint (http://localstack:4566)
+#
+# OrbStack note: /var/run/docker.sock is the standard socket path OrbStack
+# exposes, so the volume mount works without any additional configuration.
+
+networks:
+  devnet:
+    driver: bridge
+
+volumes:
+  localstack_data:
+
+services:
+
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sample_code_2_devcontainer
+    volumes:
+      # Workspace
+      - ..:/workspace:cached
+      # Docker socket — gives the container access to OrbStack / Docker daemon
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      PYTHONPATH: /workspace
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      # Default to LocalStack for local development.
+      # Override in .env (or devcontainer.json remoteEnv) for real AWS.
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+    env_file:
+      # Merges BEA_API_KEY and any real AWS creds from .env when present.
+      # File is gitignored; copy example.env → .env to create it.
+      - path: ../.env
+        required: false
+    networks:
+      - devnet
+    depends_on:
+      localstack:
+        condition: service_healthy
+    # Keep the container alive so VS Code / Cursor can attach.
+    command: sleep infinity
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: sample_code_2_localstack
+    ports:
+      - "4566:4566"
+    environment:
+      # Restrict to S3 only — keeps startup fast.
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+      PERSISTENCE: 1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - devnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\"'"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s

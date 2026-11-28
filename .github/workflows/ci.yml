@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type check
+        run: mypy sample_2
+
+      - name: Test (AWS and the BEA API are mocked; no credentials needed)
+        run: pytest -v
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build production image
+        run: docker build -f Dockerfile-prod -t bea-pipeline:${{ github.sha }} .
+
+      - name: Smoke test the image
+        run: |
+          docker run --rm --read-only --tmpfs /tmp bea-pipeline:${{ github.sha }} --help
+          # No BEA_API_KEY: must fail cleanly with exit code 2, not a traceback
+          set +e
+          docker run --rm --read-only --tmpfs /tmp bea-pipeline:${{ github.sha }} --bucket ci-smoke
+          test $? -eq 2

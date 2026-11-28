@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # botocore pins python-dateutil<3.0.0; a 3.x pin makes requirements.txt uninstallable
+      - dependency-name: python-dateutil
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

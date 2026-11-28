@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sample_2"
+version = "0.2.0"
+description = "BEA API data pipeline with AWS S3 storage"
+authors = [{name = "KJ Lang", email = "k.j.lang.tech@gmail.com"}]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.35",
+    "pandas>=2.2",
+    "requests>=2.32.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "moto[s3]>=5.0",
+    "ruff>=0.15",
+    "mypy>=1.15",
+    "pandas-stubs",
+    "types-requests",
+    "boto3-stubs[s3]",
+    "pre-commit>=4.0",
+]
+
+[project.scripts]
+bea-pipeline = "sample_2.main:main"
+
+[project.urls]
+Homepage = "https://github.com/FrancoJim/sample_code_2"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sample_2*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sample_2"]
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --cov=sample_2 --cov-report=term-missing"

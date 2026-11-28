@@ -1,0 +1,30 @@
+services:
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - .:/app
+    profiles:
+      - dev
+
+  app-prod:
+    image: bea-pipeline:latest
+    build:
+      context: .
+      dockerfile: Dockerfile-prod
+    env_file:
+      - path: .env
+        required: false
+    # Pass pipeline flags after the service name, e.g.:
+    #   docker compose --profile prod run --rm app-prod --bucket my-bucket --dataset gdp
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - prod

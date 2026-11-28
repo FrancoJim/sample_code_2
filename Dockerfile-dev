@@ -1,0 +1,18 @@
+FROM python:3.15-slim
+LABEL maintainer="KJ Lang <k.j.lang.tech@gmail.com>"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends make && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install the package + dev tools; a volume mount at runtime overlays the source for live edits
+COPY pyproject.toml README.md ./
+COPY sample_2/ sample_2/
+RUN pip install --no-cache-dir -e ".[dev]"
+
+CMD ["bea-pipeline", "--help"]

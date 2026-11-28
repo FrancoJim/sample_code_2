@@ -1,0 +1,45 @@
+# System files
+.DS_Store
+
+# IDE/Editor files
+.vscode/
+.idea/
+
+# Python dependency folder
+venv/
+
+# Python byte code
+__pycache__/
+
+# Build/Output directories
+dist/
+build/
+
+# Environment files. example.env stays tracked as the template.
+.env
+.env.*
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+*serviceaccount*.json
+.aws/
+
+# Configuration files
+.config/
+
+# Data Directory
+data/
+
+# Claude Code local files
+.claude/
+
+# Virtualenvs, tool caches, coverage, build output
+.venv/
+.lockenv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
